@@ -1,0 +1,140 @@
+---
+title: "Tendril Plot Visualization"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Tendril Plot Visualization: Presentation of specific adverse events in clinical trials 
+
+This script can be used to generate a Tendril Plot visualization for adverse events data from a clinical trial. 
+
+The Tendril Plot is a replication of that found in Karpefors & Weatherall 2018:
+
+Karpefors M. & Weatherall J. (2018). The Tendril Plot – a novel visual summary of the incidence, significance and temporal aspects of adverse events in clinical trials. Journal of the American Medical Informatics Association, 25(8): 1069-1073. DOI: 10.1093/jamia/ocy016
+
+An R-package does exist specifically for producing Tendril Plots, created by the authors of the publication, and more information about how to set up the data and create this specific visualization can be found in the following documentation: 
+
+https://CRAN.R-project.org/package=Tendril
+
+
+## Description and generation
+
+A tendril plot is a method of visually summarizing the timing, directionality, and magnitude of associations for adverse events after receipt of an intervention. Each “tendril” represents a preferred term for an adverse event with the colouring of each point indicating false-discovery-rate corrected p-values (Pearson’s chi-squared test for the hypothesis that the treatment arms have the same proportion of events up to that event) and the size of each point being proportional to the total number of events for that preferred term.  
+
+The path followed by the tendril presents contains the information pertaining to event timing and direction of association (i.e., intervention or comparator). The time since randomization runs along each branch with the magnitude (or length) between points being proportional to the timing between each event. The center of the figure represents the start of the study and all tendrils begin moving directly upwards, with each event shifting the direction of the tendril – clockwise for events in the placebo arm or counter-clockwise for events in the active arm – by some degree. The degree can be configured for optimal presentation and does not need to be the same for both arms, in fact it may be preferable to set the degrees as proportional to the number of participants in each arm to prevent potential bias caused by unbalanced treatment allocation. The Tendril package follows the following algorithm: 
+
+For the Tendril Plot:
+A.	Sort the events according to time since randomization. 
+B.	Calculate the magnitudes of the vectors as the time between subsequent events. For an event occurring at the same time as the previous event, the magnitude will be zero. 
+C.	Calculate the angle of the vectors. For each vector the angle is the cumulative sum of all angles up to that event. The angle is negative (clockwise rotation) for events on the placebo arm and positive (counter-clockwise rotation) for events on the active arm. Zero-magnitude vectors will still contribute to angular changes. Thus, if 3 events, 2 on placebo and one on active, occur at the same time, the net effect is a 1 unit clockwise rotation.
+D.	Add the vectors together cumulatively, i.e., the next vector in time starts at the end of the previous vector in time. The resulting sequence of vectors constitutes the tendril for that AE.
+ 
+
+## Data file organization
+
+The Tendril Plot uses individual participant data as opposed to the aggregate summary data that is used by other adverse event visualizations. Consequently, the data is set up in a long format with a variable for subject ID, treatment they received, specific harm experienced, and the timing of the event (e.g., days since randomization). The full data set can be imported such that participants woh do not experience any harms are still included and this will form the separate, optional dataframe from which the required subset – only participants who experience an event – will be created for the main figure. 
+
+| SubjectID | Treatment    | SpecificHarm   | Days |
+|-----------|--------------|----------------|------|
+| 1001      | Intervention | PreferredTerm1 | x    |
+| 1001      | Intervention | PreferredTerm2 | x    |
+| 1002      | Intervention | PreferredTerm2 | x    |
+| 1003      | Comparator   | PreferredTerm3 | x    |
+| 1003      | Comparator   | PreferredTerm3 | x    |
+| 1004      | Intervention | PreferredTerm1 | x    |
+| 1005      | Comparator   | PreferredTerm4 | x    |
+| 1006      | Comparator   | PreferredTerm2 | x    |
+| 1007      | Comparator   | PreferredTerm5 | x    |
+
+## Source of example data
+
+Data for this example comes from a trial of gabapentin vs. placebo (Trial 945-210) which has been revisited to analyze and publish the complete harms as part of a grant from the Restoring Invisible and Abandoned Trials (RIAT) initiative – Principal Investigator: Dr. Evan Mayo-Wilson.
+
+## Preparation of data
+
+```{r harms}
+# Set Working Directory to be Whichever folder contains the data
+
+setwd("D:/Dropbox/Data/RIAT Visualizations")
+
+# Import the comma separate value file containing the trial data
+
+SubjList <- read.csv("D:/Dropbox/Data/RIAT Visualizations/Tendril_945-210.csv", sep=",", fileEncoding = 'UTF-8-BOM')
+
+# Generate subset of data that is only the participants who experienced a harm
+
+t <- subset(SubjList, COSTARTpreferredterm != "")
+```
+
+## Visualization code
+
+The following code generates the Tendril Plot visualization. An example visualization (Trial 945-210) is included. 
+
+```{r tendril, echo=TRUE}
+
+# install.packages("Tendril")
+
+library(Tendril)
+library(ggplot2)
+
+harms <- Tendril(mydata = t,
+                 rotations = 5, # set the degree to which each event pulls a tendril in a direction
+                 AEfreqThreshold = 3, # Change the number of occurrences required to be plotted
+                 Tag = "treatment_dic",
+                 Treatments = c("Placebo", "Gabapentin"),
+                 Unique.Subject.Identifier = "patient_id",
+                 Terms = "COSTARTpreferredterm",
+                 Treat = "treatment_dic",
+                 StartDay = "aestartday",
+                 SubjList = SubjList, 
+                 SubjList.subject = "patient_id",
+                 SubjList.treatment = "treatment_dic",
+                 suppress_warnings = TRUE)
+
+# Default plot and coloring (each harm)
+plot(harms)
+
+# Colour instead by the log adjusted p-value
+plot(harms, coloring = "p.adj") +
+   ggtitle("Trial: 945-210") # Change the title overall to match the name of the trial
+
+```
+
+## Interactive visualization
+
+By specifying "interactive = TRUE" in the call to create the plot with additional options, an interactive plot will be created in which every event can be highlighted to show the specific harm, its timing, and the treatment.
+
+```{r options, echo=TRUE}
+
+harms <- Tendril(mydata = t,
+                 rotations = 5, # set the degree to which each event pulls a tendril in a direction
+                 AEfreqThreshold = 3, # Change the number of occurrences required to be plotted
+                 Tag = "treatment_dic",
+                 Treatments = c("Placebo", "Gabapentin"),
+                 Unique.Subject.Identifier = "patient_id",
+                 Terms = "COSTARTpreferredterm",
+                 Treat = "treatment_dic",
+                 StartDay = "aestartday",
+                 SubjList = SubjList, 
+                 SubjList.subject = "patient_id",
+                 SubjList.treatment = "treatment_dic",
+                 suppress_warnings = TRUE)
+
+# Specifying "interactive = TRUE" creates an interactive figure where every data point can be selected
+plot(harms, coloring = "p.adj", interactive = TRUE)
+
+```
+
+
+## Suggested alterations to Tendril Plot Visualization
+
+The following suggestions are slight modifications to the original presentation that may be considered to improve the clarity of the tendril plot visualization. 
+
+- .
+- . 
+- . 

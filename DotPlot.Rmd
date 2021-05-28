@@ -1,0 +1,135 @@
+---
+title: "Dot Plot Visualization"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Dot Plot Visualization: Presentation of unique preferred terms for adverse events in clinical trials 
+
+This script can be used to generate a Dot Plot visualization for adverse events data from a clinical trial. 
+
+The Volcano Plot is a replication of that found in Amit 2008:
+
+Amit O., Heiberger R.M, & Lane P.W. (2008). Graphical approaches to the analysis of safety data from clinical trials. Pharmaceutical Statistics, 7: 20-35. DOI:10.1002/pst.254
+
+## Description and generation
+
+A dot Plot is a two-panel display of the AEs most frequently occurring in the gabapentin group of the study. The first panel will present the incidence of each AE by treatment group, and the second panel will present the relative risk of that specific event for the gabapentin group relative to the placebo arm with 95% confidence intervals. Depending on the context of the trial, the right panel could alternatively present the hazard ratios or risk differences. The primary purpose of this visualization is to highlight potential signals by providing an estimate of the treatment effect and its precision. 
+
+## Data file organization
+
+The data should be set up in a wide format as in the following example, with a variable for outcome, risk in control and intervention groups, the estimate for the measure of effect (e.g., risk ratio), and the lower and upper bounds of the 95% Confidence Interval for the estimate of effect:
+
+| Outcome        | Risk (control) | Risk (intervention) | Effect estimate | 95%CI (Lower) | 95%CI (Upper) |
+|----------------|----------------|---------------------|-----------------|---------------|---------------|
+| PreferredTerm1 | x              | x                   | x               | x             | x             |
+| PreferredTerm2 | x              | x                   | x               | x             | x             |
+| PreferredTerm3 | x              | x                   | x               | x             | x             |
+| .              | .              | .                   | .               | .             | .             |
+| PreferredTermn | x              | x                   | x               | x             | x             |
+
+## Source of example data
+
+Data for this example comes from a trial of gabapentin vs. placebo (Trial 945-210) which has been revisited to analyze and publish the complete harms as part of a grant from the Restoring Invisible and Abandoned Trials (RIAT) initiative – Principal Investigator: Dr. Evan Mayo-Wilson.
+
+## Preparation of data
+
+```{r harms}
+# Set Working Directory to be Whichever folder contains the data
+
+setwd("D:/Dropbox/Data/RIAT Visualizations")
+
+# Import the comma separate value file
+
+PreferredTerms <- read.csv("D:/Dropbox/Data/RIAT Visualizations/PreferredTerm_945-210.csv", sep=",", fileEncoding = 'UTF-8-BOM')
+RRSortedPT <- PreferredTerms[order(-PreferredTerms$RiskRatio ),]
+
+# Create subset of full data with the elements that we need for each half of the plot
+
+PTRisk <- subset(RRSortedPT, select=c(outcome,RiskPlacebo,RiskGabapentin,RiskRatio))
+PTRisk$outcome <- factor(PTRisk$outcome, levels = PTRisk$outcome[order(-PTRisk$RiskRatio)])
+PTRiskRatio <- subset(RRSortedPT, select=c(outcome,RiskRatio,RRLCL,RRUCL))
+PTRiskRatio$outcome <- factor(PTRiskRatio$outcome, levels = PTRiskRatio$outcome[order(-PTRiskRatio$RiskRatio)])
+```
+
+## Visualization code
+
+# Part 1
+
+The first section of code generates the first half (left side) of the visualization: the group-specific risks.
+
+```{r left, echo=TRUE}
+# install.packages("reshape")
+# install.packages("egg")
+
+library(reshape)
+ByGroup <- melt(PTRisk, id=c("outcome"))
+ByGroup <- ByGroup[ByGroup$variable != "RiskRatio",]
+
+library(ggplot2)
+library(viridis)
+library(scales)
+
+left <- ggplot(ByGroup, aes(x=value, y=outcome, fill=variable)) +
+              geom_dotplot(binaxis='y', stackdir='center', dotsize = 0.5) +
+              ylab("MedDRA Preferred Term") +
+              scale_fill_viridis_d() +
+              scale_x_continuous(name = "Percent", breaks = c(0,0.1,0.2,0.3), labels = c("0"="0", "0.1"= "10", "0.2"="20", "0.3"="30"), limits = c(0, 0.3)) +
+              scale_y_discrete(limits = rev(levels(ByGroup$outcome))) +
+              theme(legend.position="bottom", 
+                    panel.background = element_blank(),
+                    panel.border = element_rect(color = "black", fill = NA, size = 1),
+                    panel.grid.major.y = element_line(color = "black", size = 0.1, linetype = 3), 
+                    axis.ticks.x = element_line(size = 1, colour = "black")) 
+```
+
+# Part 2
+
+The next segment of code generates the second half (right side) of the visualization: the effect estimate and corresponding confidence interval.
+
+```{r right, echo=TRUE}
+right <- ggplot(PTRiskRatio, aes(x=outcome, y=RiskRatio, ymin=RRLCL, ymax=RRUCL)) +
+                geom_pointrange(fatten=2) + 
+                geom_hline(yintercept = 1, linetype = 2, colour = "green", size = 0.75) + 
+                scale_y_continuous(name = "Relative Risk with 95% CI", 
+                                   trans = log2_trans(),
+                                   breaks = c(0.01,0.25,1,10,20,50,100,220)) +
+                scale_x_discrete(limits = rev(levels(PTRiskRatio$outcome))) + 
+                coord_flip() +
+                theme(legend.position="bottom", 
+                      axis.title.y = element_blank(),
+                      axis.text.y = element_blank(), 
+                      panel.background = element_blank(),
+                      panel.border = element_rect(color = "black", fill = NA, size = 1),
+                      panel.grid.major.y = element_line(color = "black", size = 0.1, linetype = 3),
+                      axis.ticks.y = element_blank(),
+                      axis.ticks.x = element_line(size = 1, colour = "black"),
+                      axis.text.x = element_text(angle=90, hjust=1, size=10)) 
+```
+
+# Part 3
+
+The third section of code puts the two figures together into a single figure. An example visualization (Trial 945-210) is included.
+
+```{r combining, echo=TRUE}
+# install.packages(ggpubr)
+
+library(ggpubr)
+DotPlot <- ggarrange(left, right, ncol=2)
+annotate_figure(DotPlot, 
+                bottom = text_grob("Gabapentin (N = 84) | Placebo (N = 81)", 
+                                   color = "black", face = "bold", size = 14),
+                top = text_grob("Trial: 945-210", color = "black", face = "bold", size = 10))
+```
+
+## Suggested alterations to Dot Plot Visualization
+
+The following suggestions are slight modifications to the original presentation that may be considered to improve the clarity of the dot plot visualization. 
+
+- Add additional panels for other effect estimates (e.g., a third panel to show the estimate and 95% CI for the risk difference)
+- Selection criteria applied to the harms to reduce the number on the plot and improve legibility

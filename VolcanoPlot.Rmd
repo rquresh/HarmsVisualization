@@ -1,0 +1,101 @@
+---
+title: "Volcano Plot Visualization"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Volcano Plot Visualization: Presentation of unique preferred terms for adverse events in clinical trials 
+
+This script can be used to generate a Volcano Plot visualization for adverse events data from a clinical trial. 
+
+The Volcano Plot is a replication of that found in Zink 2013:
+
+Zink R.C., Wolfing R., & Mann G. (2013). Summarizing the incidence of adverse events using volcano plots and time intervals. Clinical Trials, 10: 398-406. DOI:10.1177/1740774513485311
+
+## Description and generation
+
+A volcano plot summarizes several characteristics that are important for understanding the relative harms associated with an intervention including: the proportional frequency of each adverse event (bubble radius) as well as the total number of adverse events experienced in both treatment groups (total bubble area), the specific treatment with greater association (colour and side of the figure), statistical significance of the association (colour saturation and position on vertical axis), and magnitude of effect (position on horizontal axis). As the treatment and statistical significance both have their own elements in the figure (i.e., side and vertical position), depending on desired context and message, the colour of bubbles could instead be used to indicate some other dimension of AE data such system organ class or event severity. Although an R-package does exist for volcano plots, we produce this figure is using the procedures for bubble plots and the following algorithm: 
+
+For the Volcano Plot:
+A.	Take a selection of adverse events to be visualized 
+B.	Compute Fisher's exact test p-value, total number of events, and corresponding treatment effects for events of interest
+C.	Compute -log10(raw p-value) for the y-axis and treatment effect (risk difference, odds ratio, or risk ratio).
+D.	Size bubbles according to total events. 
+E.	Bubbles can be colored according to the magnitude of treatment effect. blue to one side, red to the other, with grey in the middle to help de-emphasize.
+F.	Add reference lines for -log10(0.05) for unadjusted and -log10(alpha*) for adjusted.
+
+## Data file organization
+
+The data should be set up in a wide format as in the following example, with a variable for outcome, frequency in control and intervention groups, the estimate for the measure of effect (e.g., risk difference), and the p-value for the estimate of effect (adjusted or unadjusted):
+
+| Outcome        | Frequency (control) | Frequency (intervention) | Effect estimate | P-value |
+|----------------|---------------------|--------------------------|-----------------|---------|
+| PreferredTerm1 | x                   | x                        | x               | x       |
+| PreferredTerm2 | x                   | x                        | x               | x       |
+| PreferredTerm3 | x                   | x                        | x               | x       |
+| .              | .                   | .                        | .               | .       |
+| PreferredTermn | x                   | x                        | x               | x       |
+
+## Source of example data
+
+Data for this example comes from a trial of gabapentin vs. placebo (Trial 945-210) which has been revisited to analyze and publish the complete harms as part of a grant from the Restoring Invisible and Abandoned Trials (RIAT) initiative – Principal Investigator: Dr. Evan Mayo-Wilson.
+
+## Preparation of data
+
+```{r harms}
+# Set Working Directory to be Whichever folder contains the data
+
+setwd("D:/Dropbox/Data/RIAT Visualizations")
+
+# Import the comma separate value file
+
+PreferredTerms <- read.csv("D:/Dropbox/Data/RIAT Visualizations/PreferredTerm_945-210.csv", sep=",", fileEncoding = 'UTF-8-BOM')
+
+PT_Data <- subset(PreferredTerms, select=c(outcome,trial_no,freq_Placebo,freq_Gabapentin,RiskDifference,RDpval))
+
+# Some adjustments to the data to aid the visualization
+
+PT_Data$freq_Total <- PT_Data$freq_Placebo + PT_Data$freq_Gabapentin # Total number of events to scale the size of the bubbles
+PT_Data$harmful <- ifelse(PT_Data$RiskDifference < 0, 0, 1) # Create an indicator for associated with intervention (harmful = 1) or control (harmful = 0)
+PT_Data$RDpval <- replace(PT_Data$RDpval, PT_Data$RDpval<=0.001, 0.001) # The purpose of this is to eliminate infinite values when taking the log of the p-value. If using adjusted p-values, change the "<=0.001" to reflect an appropriate value. 
+PT_Data$logPval <- -log10(PT_Data$RDpval)
+```
+
+## Visualization code
+
+The following code generates the Volcano Plot visualization. An example visualization (Trial 945-210) is included. 
+
+```{r pressure, echo=TRUE}
+library(ggplot2)
+library(dplyr)
+
+ggplot(PT_Data, aes(x=RiskDifference, y=logPval, size=freq_Total, color=as.factor(harmful), label=outcome)) +
+       geom_point(alpha=(PT_Data$logPval)) +
+       ggtitle("Trial: 945-210") +
+       scale_size(range = c(.1, 24)) +
+       scale_color_manual(breaks = c("0", "1"), values=c("deepskyblue2", "red")) +
+       geom_text(size = 3, color = "black", check_overlap = TRUE) +
+       geom_hline(yintercept = 1.3, linetype = 2, colour = "red") +
+       scale_y_continuous(name = "-log10(Raw p-vlaue [unadjusted])", limits = c(0,3)) + # Max of 3 equals a pvalue of 0.001. If using an adjusted p-value, the max may need to be adjusted further to accommodate lower pvalues
+       scale_x_continuous(name = "Risk Difference for Gabapentin vs. Placebo", breaks = c(-0.1, -0.05,0,0.05,0.1,0.15,0.2, 0.25), limits = c(-0.1,0.25)) + # change the limits to that the largest absolute effect size is contained
+       theme(panel.background = element_blank(), 
+             legend.position = "none", 
+             axis.line.x = element_line(size = 1, colour = "black"),
+             axis.line.y = element_line(size = 1, colour = "black"))
+```
+
+## Suggested alterations to Volcano Plot Visualization
+
+The following suggestions are slight modifications to the original presentation that may be considered to improve the clarity of the volcano plot visualization. 
+
+- Add label to reference line that indicates it is p = 0.05
+- Add labels to all events that have the same underlying data and are currently hidden (e.g., 'ggrepel'): this can get messy with too many labels
+- Vertical line at Risk Difference = 0
+- Label for left  and right of x axis (i.e., more common in placebo or gabapentin)
+- Colour can represent a different dimension of information (e.g., body systems) 
+- Selection criteria applied to the harms to reduce the number on the plot and improve legibility

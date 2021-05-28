@@ -1,0 +1,105 @@
+---
+title: "Barchart Visualization"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Barchart Visualization: Higher-order presentation of Adverse Events in clinical trials 
+
+This script can be used to generate a Bar Chart visualization for adverse events data from a clinical trial. 
+
+The Bar Chart is a replication of that found in Chuang-Stein & Xia 2013:
+
+Chuang-Stein C. & Xia H.A. (2013). The Practice of Pre-Marketing Safety Assessment in Drug Development. Journal of Biopharmaceutical Statistics, 23(1): 3-25. DOI: 10.1080/10543406.2013.736805
+
+## Description and generation
+
+A bar chart is a standard bar graph that depicts the relative occurrence of harms experienced across higher classifications of adverse events (e.g., mid-level and body-level systems). Specifically, the bars present the counts of participants experiencing an adverse event to provide comparison of observed occurrence in a study and the bars can be broken down into different colors to present the occurrence by severity classification (i.e., mild, moderate, severe). This figure is produced using R procedures for bar charts and the following algorithm: 
+
+For the bar chart: 
+A.	Take all adverse events occurring over the trial and classify according to a higher-order term of choice (either mid-level or body-level system).
+B.	Code all adverse events by severity (as determined by trial investigators)
+C.	Generate a bar chart, by treatment group, of the counts for all harms grouped according to their higher-order term and severity. 
+
+## Data file organization
+
+The data should be set up in a long format as in the following example, with a variable for treatment, body system, severity, and the number of times of occurrence:
+
+INT = Intervention; CTRL = Control
+
+| Treatment | BodySystem   | Severity     | Count |
+|-----------|--------------|--------------|-------|
+| Int       | BodySystem_1 | Mild         | x     |
+| Int       | BodySystem_1 | Moderate     | x     |
+| Int       | BodySystem_1 | Severe       | x     |
+| Int       | BodySystem_1 | Unclassified | x     |
+| Ctrl      | BodySystem_1 | Mild         | x     |
+| Ctrl      | BodySystem_1 | Moderate     | x     |
+| Ctrl      | BodySystem_1 | Severe       | x     |
+| Ctrl      | BodySystem_1 | Unclassified | x     |
+| .         | .            | .            | .     |
+| .         | .            | .            | .     |
+| .         | .            | .            | .     |
+| .         | .            | .            | .     |
+| Int       | BodySystem_n | Mild         | x     |
+| Int       | BodySystem_n | Moderate     | x     |
+| Int       | BodySystem_n | Severe       | x     |
+| Int       | BodySystem_n | Unclassified | x     |
+| Ctrl      | BodySystem_n | Mild         | x     |
+| Ctrl      | BodySystem_n | Moderate     | x     |
+| Ctrl      | BodySystem_n | Severe       | x     |
+| Ctrl      | BodySystem_n | Unclassified | x     |
+
+## Source of example data
+
+Data for this example comes from a trial of gabapentin vs. placebo (Trial 945-210) which has been revisited to analyze and publish the complete harms as part of a grant from the Restoring Invisible and Abandoned Trials (RIAT) initiative – Principal Investigator: Dr. Evan Mayo-Wilson.
+
+## Preparation of data
+
+```{r harms}
+# Set Working Directory to be Whichever folder contains the data
+
+# setwd("D:/Dropbox/Data/RIAT Visualizations")
+
+# Import the comma separate value file containing the trial data
+
+Midlevel_severity <- read.csv("D:/Dropbox/Data/RIAT Visualizations/Midlevel_severity_945-210.csv", sep=",", fileEncoding = 'UTF-8-BOM')
+
+# Rename dataframe to "Events"
+
+Events <- data.frame(Midlevel_severity)
+```
+
+## Visualization code
+
+The following code generates the Bar Chart visualization. An example visualization (Trial 945-210) is included. 
+
+```{r pressure, echo=TRUE}
+library(ggplot2)
+ggplot(Events, aes(fill=Severity, y=Count, x=Bodysystem)) + 
+       geom_bar(position=position_stack(reverse=TRUE), stat="identity") +
+       scale_y_continuous(name="Unique count", limits=c(0, 100)) + # If any body systems appear more than 100 times, change the upper limit to an appropriate number
+       ggtitle("Trial: 945-210") + # Change the title overall to match the name of the trial
+       xlab("\nCOSTART Midlevel Bodysystem") + 
+       scale_fill_viridis_d() +
+       facet_grid(Treatment ~ .) +
+       theme(axis.text.x = element_text(angle=90, hjust=1, size=8),
+             axis.title.x = element_text(color = "black", size = 14, face = "bold"), 
+             panel.background = element_blank(), 
+             panel.grid.major.x = element_blank(), 
+             panel.grid.major.y = element_line(color = "grey", size = 1))
+```
+
+## Suggested alterations to Bar Chart Visualization
+
+The following suggestions are slight modifications to the original presentation that may be considered to improve the clarity of the bar chart visualization. 
+
+- Changing "Y-axis" title to "Frequency (count)" to be explicit that the y-axis is the number of times each  
+- Place bars side by side instead of in separate panels to potentially improve comparability
+- Include numbers above each bar to indicate exactly how many times each occurred
+- Remove body systems which only have one or two events across both arms as these are unlikely to be of interest and body systems with no events in either group are already excluded from the figure

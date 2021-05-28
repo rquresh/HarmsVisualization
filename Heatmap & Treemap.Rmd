@@ -1,0 +1,175 @@
+---
+title: "Heatmap and Treemap Visualization"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Heatmap & Treemap Visualization: Presentation of unique preferred terms for adverse events in clinical trials 
+
+This script can be used to generate a Heatmap or a Treemap visualization for adverse events data from a clinical trial. 
+
+The Heatmap is a replication of that found in Zink 2018:
+
+Zink R.C. et al. (2018). Sources of safety data and statistical strategies for esign and analysis: Clinical Trials. Therapeutic Innovation and Regulatory Science, 52(2): 141-158. DOI:10.1177/2168479017738980
+
+The Treemap is not a direct replication, but is a subtype of Heatmap that is used to present hierarchical data and has been used to present data on harms by organizations such as the Food and Drug Administration.
+
+## Description and generation
+
+A Heatmap presents data about the expected standardized effect for harms overall and across several selected subsets/subgroups of harms. The subgroups can be any that are available, but they should be distinct such that each ‘column’ in the heatmap shows a different set of harms that may be of interest to evidence users. A standardized effect is important heatmaps as the risks can be variable because of differences in reporting but the degree of uncertainty is difficult to show in a two-dimensional field, thus the standardization aims to temper the lack of presentation of precision surrounding estimates. The method of organization that is selected for the harms in a heatmap is also important as it will change which inferences can be more easily made by looking at the figure. For example, when harms are arranged by to higher-order body systems, readers can see which specific events and body systems are most likely affected by the intervention. We will create our heatmap using a standardized risk difference – represented by colour – and arrange our preferred terms by mid-level classifications, organized from most to least events in gabapentin, to replicate the source material. Although an R-package does exist for heatmaps, we produce this figure using the procedures for tile plots and the following algorithm: 
+
+For the Heatmap:
+A.	For all (or a selection of) preferred terms for harms occurring in the trial and compute the standardized difference for all events “overall” with the following formula: 
+(p_t - p_c) / (sqrt(p_t*(1-p_t) / n_t + p_c*(1-p_c) / n_c)
+B.	Select subgroups of interest/availability and keep only the events meeting those criteria, then calculate the standardized difference for events in each of these subgroups. Subgroup examples:
+  i.	 Sex – Female, Male
+  ii.	 Seriousness – Serious AEs, Non-serious AEs
+  iii. Severity – Moderate and severe AEs, Severe AEs
+  iv.	 Recurrence – Single episode AEs, Multiple episode AEs
+  v.	 Relatedness to intervention – Likely related, Possibly related, Definitely related
+C.	Merge the files for all subgroups into one single data file
+D.  Plot the specific harms on the Y-axis with the different subgroups on the X-axis.
+
+A Treemap is a subtype of heatmap that presents data about the expected standardized effect for harms at the level of the preferred term in boxes, organized by their mid-level classification. As with the heatmap, colour represents the standardized effect, however unlike the heatmap, the absolute count for events occurring in the intervention arm is also represented by the size of the box for each event. The size of the preferred term boxes also affects the size of the corresponding mid-level classifications, indicating which body systems are more common among gabapentin. 
+
+For the Treemap:
+A.	For all (or a selection of) preferred terms for harms occurring in the trial and compute the standardized difference for all events “overall” with the following formula: 
+(p_t - p_c) / (sqrt(p_t*(1-p_t) / n_t + p_c*(1-p_c) / n_c)
+B.	Plot the specific harms grouped according to their corresponding midlevel terms using the Treemap function.
+C.	Size the boxes according to number of events in the intervention arm.
+
+## Data file organization
+
+The data should be set up in a long format as in the following example, with a variable for outcome, associated higher-order term, frequency in control and intervention groups, number of participants in control and intervention groups, risk of the outcome in the control and intervention groups, and the specific subtype for which the data is being presented. The setup below is for the trial "overall" participants, however the Heatmap presents data on harms from different subgroups as well. From the trial Individual Participant Data, select only participants meeting each different subgroup that are to be visualized (independently) and recreate the same structure and estimates for those participants. Once all subgroup datasets have been created, they will be joined into a single data file for the Heatmap. The Treemap will use only data from the "Overall" subgroup. 
+
+| Outcome        | Mid_level | Freq_placebo | Freq_intervention | N_placebo | N_intervention | Risk_placebo | Risk_intervention | Subgroup |
+|----------------|-----------|--------------|-------------------|-----------|----------------|--------------|-------------------|----------|
+| PreferredTerm1 | MidLevel1 | x            | x                 | x         | x              | x            | x                 | Overall  |
+| PreferredTerm2 | MidLevel2 | x            | x                 | x         | x              | x            | x                 | Overall  |
+| PreferredTerm3 | MidLevel3 | x            | x                 | x         | x              | x            | x                 | Overall  |
+| PreferredTerm4 | MidLevel4 | x            | x                 | x         | x              | x            | x                 | Overall  |
+| PreferredTerm5 | MidLevel5 | x            | x                 | x         | x              | x            | x                 | Overall  |
+| PreferredTerm6 | MidLevel6 | x            | x                 | x         | x              | x            | x                 | Overall  |
+| PreferredTerm7 | MidLevel7 | x            | x                 | x         | x              | x            | x                 | Overall  |
+| .              | .         | .            | .                 | .         | .              | .            | .                 | .        |
+| PreferredTermn | MidLeveln | x            | x                 | x         | x              | x            | x                 | Overall  |
+## Source of example data
+
+Data for this example comes from a trial of gabapentin vs. placebo (Trial 945-210) which has been revisited to analyze and publish the complete harms as part of a grant from the Restoring Invisible and Abandoned Trials (RIAT) initiative – Principal Investigator: Dr. Evan Mayo-Wilson.
+
+## Preparation of data
+
+```{r harms}
+# Set Working Directory to be Whichever folder contains the data
+
+setwd("D:/Dropbox/Data/RIAT Visualizations")
+
+# Import the comma separate value file
+
+PreferredTerms <- read.csv("D:/Dropbox/Data/RIAT Visualizations/PreferredTerm_945-210.csv", sep=",", fileEncoding = 'UTF-8-BOM')
+
+# Create subset of full data with the elements that we need for the plot
+
+Overall <- subset(PreferredTerms, select=c(outcome,mid_level,freq_Placebo, freq_Gabapentin,N_Placebo,N_Gabapentin,RiskPlacebo,RiskGabapentin))
+
+# Add a variable to mark which subgroup of harms is being mapped. As this is created only with a single set of harms (Overall), that is what we put. But additional subgroups of the harms could be created and put into other dataframes (e.g., data1 = moderate or severe harms, data2 = serious harms, data3 = probably or definitely associated with the intervention, data4 = harms that are recurrent, etc.) which are then merged using the Outcome as the joining variable.
+
+Overall$subgroup <- "Overall"
+
+# Pull in any subsets of harms with the data set up the same way and then append them in a new complete dataframe
+
+Female <- read.csv("D:/Dropbox/Data/RIAT Visualizations/Subsets for Heatmap (Participant)/Heat_Female_Participant_945-210.csv", sep=",", fileEncoding = 'UTF-8-BOM')
+Male <- read.csv("D:/Dropbox/Data/RIAT Visualizations/Subsets for Heatmap (Participant)/Heat_Male_Participant_945-210.csv", sep=",", fileEncoding = 'UTF-8-BOM')
+Severity <- read.csv("D:/Dropbox/Data/RIAT Visualizations/Subsets for Heatmap (Participant)/Heat_severity_Participant_945-210.csv", sep=",", fileEncoding = 'UTF-8-BOM')
+Serious <- read.csv("D:/Dropbox/Data/RIAT Visualizations/Subsets for Heatmap (Participant)/Heat_Serious_Participant_945-210.csv", sep=",", fileEncoding = 'UTF-8-BOM')
+Nonrecurrent <- read.csv("D:/Dropbox/Data/RIAT Visualizations/Subsets for Heatmap (Participant)/Heat_Nonrecurrent_Participant_945-210.csv", sep=",", fileEncoding = 'UTF-8-BOM')
+Recurrent <- read.csv("D:/Dropbox/Data/RIAT Visualizations/Subsets for Heatmap (Participant)/Heat_Recurrent_Participant_945-210.csv", sep=",", fileEncoding = 'UTF-8-BOM')
+
+#Append the subsets all to a single data file
+data <- rbind(Overall, Female, Male, Severity, Serious, Nonrecurrent, Recurrent)
+
+# Calculate the standardized difference
+data$effect <- (data$RiskGabapentin - data$RiskPlacebo)/(sqrt(((data$RiskGabapentin*(1-data$RiskGabapentin))/data$N_Gabapentin)+((data$RiskPlacebo*(1-data$RiskPlacebo))/data$N_Placebo)))
+data$subgroup <- factor(data$subgroup, levels = c("Overall", "Female", "Male", "Moderate or severe", "Serious", "Single episode", "Multiple episodes"))
+data$mid_level <- as.factor(data$mid_level)
+data$outcome <- factor(data$outcome, levels = unique(data$outcome[order(data$mid_level)]))
+```
+
+## Visualization code - Heatmap
+
+The following code generates the Heatmap visualization. An example visualization (Trial 945-210) is included. 
+
+```{r heatmap, echo=TRUE}
+library(ggplot2)
+library(viridis)
+
+Heatmap <- ggplot(data, scale = "column", aes(x=subgroup, y=outcome)) +
+        geom_tile(aes(fill=effect, height = 1)) +
+        scale_fill_viridis_c(name="Standardized \nRisk Difference \n(Gabapentin vs.\nPlacebo)") +
+        #annotate(geom = "text", label = unique(data$mid_level), size = 6) +
+        #geom_text(angle=90, colour="darkgray", aes(label=mid_level), position=position_dodge(width=0.9), col=gray) +
+        # facet_grid(data$mid_level, drop = TRUE) +
+        ggtitle("Trial: 945-210") +
+        labs(x = "Subsets of harms", y = NULL) +
+        theme(axis.text.x = element_text(angle=45, hjust=1, size=10),
+              axis.title.x = element_text(color = "black", size = 14, face = "bold"), 
+              legend.position = "right",
+              panel.background = element_blank(), 
+              panel.grid.major.x = element_blank(), 
+              panel.grid.major.y = element_blank())
+
+plot(Heatmap)
+```
+
+After the Heatmap is produced, the figure should be exported and then labels for the mid-level terms can be added manually using an image editing program. 
+
+## Visualization code - Treemap
+
+The following code generates the Treemap visualization. An example visualization (Trial 945-210) is included. 
+
+```{r treemap, echo=TRUE}
+treemap <- Overall
+
+# Create a variable for the standardized effect and total number of people experiencing an event 
+treemap$effect <- (treemap$RiskGabapentin - treemap$RiskPlacebo)/(sqrt(((treemap$RiskGabapentin*(1-treemap$RiskGabapentin))/treemap$N_Gabapentin)+((treemap$RiskPlacebo*(1-treemap$RiskPlacebo))/treemap$N_Placebo)))
+treemap$freq_total <- treemap$freq_Placebo + treemap$freq_Gabapentin
+# Create a variable for alpha (opacity, 0 to 1) that is proportional to the number of gabapentin appearances
+treemap$percent_freqGBP <- treemap$freq_Gabapentin / max(treemap$freq_Gabapentin, na.rm = TRUE)
+
+#install.packages("treemapify")
+
+library(ggplot2)
+library(treemapify)
+
+ggplot(treemap, aes(area = freq_Gabapentin,
+                    fill = effect,
+                    label = outcome, 
+                    subgroup = mid_level)) +
+        scale_fill_viridis_c(name="Standardized \nRisk Difference \n(Gabapentin vs.\nPlacebo)") +
+        geom_treemap() + 
+        geom_treemap_subgroup_border(colour = "white") + 
+        geom_treemap_subgroup_text(place = "center", 
+                                   grow = TRUE, 
+                                   alpha = 0.5, 
+                                   colour = "black", 
+                                   fontface = "italic", 
+                                   min.size = 0) +
+        geom_treemap_text(colour = "white", 
+                          place = "topleft", 
+                          reflow = TRUE) 
+
+```
+
+## Suggested alterations to Heatmap and Treemap Visualization
+
+The following suggestions are slight modifications to the original presentation that may be considered to improve the clarity of either visualization. 
+
+- Add secondary axes labels for higher-order classifications (manually added, or automatically added)
+- Use colour scheme to better distinguish no effect (e.g., divergent with white as no effect)
+- Indication that white spaces is the lack of data for a harm within that subgroup (i.e., the harm was not reported in that subgroup)
+- Selection criteria applied to the harms to reduce the number on the plot and improve legibility
