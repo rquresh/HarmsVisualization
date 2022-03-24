@@ -4,5 +4,5 @@ This GitHub was created to host the R-Code necessary for reproducing 6 data visu
 
 ### Contents
 
-The contents of this repository include 5 R-Markdown files and a .png that includes an exmaple for each visualization as produced by the code.
+The contents of this repository include 5 R-Markdown files and a .png that includes an example for each visualization as produced by the code.
 
